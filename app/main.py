@@ -1,5 +1,6 @@
 import os
 import tempfile
+import threading
 from datetime import datetime
 from typing import List
 
@@ -21,7 +22,7 @@ from app.logic import (
     agrupar_facturas,
     guardar_factura_corregida_completa,
     clasificar_factura,
-    mover_pdf, 
+    mover_pdf,  borrar_mas_tarde
 )
 try:
     from app.Usuario import get_user_id, get_historial_path, leer_historial
@@ -170,6 +171,12 @@ async def extraer_facturas(
                     tipo
                 )
 
+                threading.Thread(
+                    target=borrar_mas_tarde,
+                    args=(pdf_original,),
+                    daemon=True
+                ).start()
+
             except Exception as e:
 
                 print(
@@ -177,7 +184,6 @@ async def extraer_facturas(
                     pdf_original,
                     str(e)
                 )
-        return response
 
     except Exception as e:
         import traceback

@@ -1016,6 +1016,10 @@ def clasificar_factura(fila):
 
 def mover_pdf(pdf_path, tipo):
     
+    import shutil
+    import os
+    import time
+
     carpetas = {
         "procesada": "facturas/procesadas",
         "manual": "facturas/corregir_manualmente",
@@ -1043,4 +1047,46 @@ def mover_pdf(pdf_path, tipo):
         destino
     )
 
-    print("COPIADO A:", destino)
+    print("PDF COPIADO:", destino)
+
+    for intento in range(10):
+
+        try:
+
+            if os.path.exists(pdf_path):
+
+                os.remove(pdf_path)
+
+                print("PDF ELIMINADO:", pdf_path)
+
+                break
+
+        except Exception:
+
+            time.sleep(1)
+
+import threading
+import time
+
+def borrar_mas_tarde(ruta):
+
+    time.sleep(5)
+
+    try:
+
+        if os.path.exists(ruta):
+
+            os.remove(ruta)
+
+            print(
+                "PDF ELIMINADO:",
+                ruta
+            )
+
+    except Exception as e:
+
+        print(
+            "ERROR ELIMINANDO:",
+            ruta,
+            str(e)
+        )
