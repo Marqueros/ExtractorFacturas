@@ -14,7 +14,7 @@ Aplicación web que extrae automáticamente los datos estructurados de facturas 
 - **Corrección manual**: los cambios realizados en la UI se guardan en el historial y en un fichero de facturas corregidas
 - **Clasificación automática de PDFs** en carpetas según resultado de la extracción:
   - `facturas/procesadas` — todos los campos obligatorios extraídos correctamente
-  - `facturas/corregir_manualmente` — faltan campos obligatorios
+  - `facturas/corregir_manualmente` — faltan campos obligatorios.
   - `facturas/imagenes` — PDF escaneado sin texto extraíble.
   - `facturas/examinadas` — factura ya revisada y corregida por un usuario.
 
