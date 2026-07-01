@@ -50,7 +50,7 @@ button:hover{
 
 .grid{
     display:grid;
-    grid-template-columns:repeat(6,1fr);
+    grid-template-columns:repeat(7,1fr);
     gap:15px;
     margin-top:20px;
 }
@@ -160,6 +160,11 @@ td{
                 <div class="kpi-text">Albaranes</div>
             </div>
 
+            <div class="kpi">
+                <div id="reenviar_pedido" class="kpi-num">0</div>
+                <div class="kpi-text">Reenviar (falta pedido cliente)</div>
+            </div>
+
         </div>
 
     </div>
@@ -199,6 +204,9 @@ async function cargarEstadisticas(){
 
     document.getElementById("albaran").innerText =
         data.albaran || 0;
+
+    document.getElementById("reenviar_pedido").innerText =
+        data.reenviar_pedido || 0;
 }
 
 async function procesar(){

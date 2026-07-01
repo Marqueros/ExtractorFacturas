@@ -14,14 +14,16 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.dirname(_APP_DIR)
+_fallback = os.path.join(os.path.dirname(_APP_DIR), "app_auto", "facturas")
+FACTURAS_DIR = os.getenv("FACTURAS_DIR", _fallback).strip('"').strip("'")
 
-CORREGIR_DIR  = os.path.join(_PROJECT_ROOT, "app_auto", "Facturas", "corregir_manualmente")
-EXAMINADAS_DIR = os.path.join(_PROJECT_ROOT, "app_auto", "Facturas", "examinadas")
-HISTORIAL_DIR  = os.path.join(_PROJECT_ROOT, "historial")
+CORREGIR_DIR       = os.path.join(FACTURAS_DIR, "corregir_manualmente")
+EXAMINADAS_DIR     = os.path.join(FACTURAS_DIR, "examinadas")
+HISTORIAL_DIR      = os.path.join(FACTURAS_DIR, "historial")
+AUTO_HISTORIAL_DIR = HISTORIAL_DIR
 
 
 # =========================================================
@@ -1024,15 +1026,15 @@ def mover_pdf(pdf_path, tipo):
     import time
 
     carpetas = {
-        "procesada": "facturas/procesadas",
-        "manual": "facturas/corregir_manualmente",
-        "imagen": "facturas/imagenes",
-        "examinada": "facturas/examinadas"
+        "procesada":  os.path.join(FACTURAS_DIR, "procesadas"),
+        "manual":     os.path.join(FACTURAS_DIR, "corregir_manualmente"),
+        "imagen":     os.path.join(FACTURAS_DIR, "imagenes"),
+        "examinada":  os.path.join(FACTURAS_DIR, "examinadas"),
     }
 
     carpeta_destino = carpetas.get(
         tipo,
-        "facturas/error"
+        os.path.join(FACTURAS_DIR, "error")
     )
 
     os.makedirs(
@@ -1052,7 +1054,7 @@ def mover_pdf(pdf_path, tipo):
 
     print("PDF COPIADO:", destino)
 
-    for intento in range(10):
+    for _ in range(10):
 
         try:
 
@@ -1141,17 +1143,57 @@ def cargar_pdfs_pendientes():
     return resultado
 
 
+def _buscar_en_directorio_historial(archivo, directorio):
+    if not os.path.exists(directorio):
+        return None
+    for nombre in os.listdir(directorio):
+        if not (nombre.startswith("historial_facturas_") and nombre.endswith(".xlsx")):
+            continue
+        hist_path = os.path.join(directorio, nombre)
+        try:
+            wb = load_workbook(hist_path, read_only=True)
+            ws = wb.active
+            for row in ws.iter_rows(values_only=True):
+                if not row or row[0] is None:
+                    continue
+                val = str(row[0]).strip()
+                if val == "Archivo" or "Extracción facturas" in val:
+                    continue
+                if val == archivo:
+                    wb.close()
+                    return [str(c) if c is not None else "-" for c in row]
+            wb.close()
+        except Exception as e:
+            print(f"Error leyendo historial {hist_path}: {e}")
+    return None
+
+
+def buscar_en_historial(archivo):
+    for directorio in [AUTO_HISTORIAL_DIR, HISTORIAL_DIR]:
+        fila = _buscar_en_directorio_historial(archivo, directorio)
+        if fila is not None:
+            return fila
+    return None
+
+
 def cargar_pdf_pendiente_individual(archivo):
+    """Devuelve (fila, fuente) donde fuente es 'historial' o 'api', o (None, None) si falla."""
+    fila = buscar_en_historial(archivo)
+    if fila is not None:
+        print(f"[historial] {archivo} encontrado en historial, sin llamada a la API")
+        return limpiar_fila(fila), "historial"
+
+    print(f"[api] {archivo} no encontrado en historial, extrayendo con LLM")
     ruta = os.path.join(CORREGIR_DIR, archivo)
     try:
         text = read_pdf_text(ruta)
         result_csv = extract_invoice_with_agent(file_name=archivo, invoice_text=text)
         tabla = csv_to_matrix(result_csv)
         if len(tabla) > 1:
-            return tabla[1]
+            return tabla[1], "api"
     except Exception as e:
         print(f"ERROR extrayendo {archivo}: {e}")
-    return None
+    return None, "api"
 
 
 def confirmar_y_mover_factura(archivo, fila_completa, usuario):

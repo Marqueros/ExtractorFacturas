@@ -485,7 +485,7 @@ async function seleccionarPendiente(archivo, elemento) {
     const btnConfirmar = document.getElementById("btnConfirmar");
 
     placeholder.style.display = "block";
-    placeholder.innerHTML = "<span class='spinner'></span>Extrayendo datos con IA... (puede tardar unos segundos)";
+    placeholder.innerHTML = "<span class='spinner'></span>Cargando datos...";
     panelDatos.style.display = "none";
     barraAccion.style.display = "none";
     btnConfirmar.disabled = true;
@@ -516,7 +516,10 @@ async function seleccionarPendiente(archivo, elemento) {
         panelDatos.style.display = "block";
         barraAccion.style.display = "block";
         btnConfirmar.disabled = false;
-        document.getElementById("estadoMsg").textContent = "";
+        const msg = document.getElementById("estadoMsg");
+        msg.textContent = data.fuente === "api"
+            ? "⚠️ Extraído con IA (no estaba en historial)"
+            : "";
 
     } catch (e) {
         mostrarToast("Error de conexión.", "error");

@@ -86,12 +86,12 @@ async def extraer_pendiente(body: dict):
     if not archivo:
         raise HTTPException(status_code=400, detail="Falta el nombre del archivo.")
 
-    fila = cargar_pdf_pendiente_individual(archivo)
+    fila, fuente = cargar_pdf_pendiente_individual(archivo)
 
     if fila is None:
         raise HTTPException(status_code=500, detail="No se pudieron extraer datos del PDF.")
 
-    return {"tabla": [EXPECTED_HEADERS, fila]}
+    return {"tabla": [EXPECTED_HEADERS, fila], "fuente": fuente}
 
 
 @app.post("/confirmar-factura")

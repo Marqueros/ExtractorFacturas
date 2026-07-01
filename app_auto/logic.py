@@ -14,7 +14,10 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
+
+_fallback = os.path.join(os.path.dirname(os.path.abspath(__file__)), "facturas")
+FACTURAS_DIR = os.getenv("FACTURAS_DIR", _fallback).strip('"').strip("'")
 
 
 # =========================================================
@@ -695,7 +698,7 @@ def export_to_excel(csv_text, path):
 # =========================================================
 
 def guardar_historial(csv_text, user_id):
-    carpeta = "historial"
+    carpeta = os.path.join(FACTURAS_DIR, "historial")
     os.makedirs(carpeta, exist_ok=True)
 
     rows = csv_to_matrix(csv_text)
@@ -823,7 +826,7 @@ def clasificar_factura(fila):
     # YA EXAMINADA (corregida manualmente)
     # ==========================================
 
-    path_corregidas = "historial/facturas_corregidas.xlsx"
+    path_corregidas = os.path.join(FACTURAS_DIR, "historial", "facturas_corregidas.xlsx")
 
     if os.path.exists(path_corregidas):
 
@@ -857,15 +860,26 @@ def clasificar_factura(fila):
         return "imagen"
 
     # ==========================================
-    # MANUAL: algún campo obligatorio falta
+    # Comprobar campos obligatorios separando
+    # PedidoCliente del resto
     # ==========================================
 
-    for campo in CAMPOS_OBLIGATORIOS:
+    otros_obligatorios = [c for c in CAMPOS_OBLIGATORIOS if c != "PedidoCliente"]
+
+    for campo in otros_obligatorios:
 
         valor = str(datos.get(campo, "-")).strip()
 
         if valor == "-":
             return "manual"
+
+    # ==========================================
+    # REENVIAR: todos los demás campos OK
+    # pero falta PedidoCliente
+    # ==========================================
+
+    if str(datos.get("PedidoCliente", "-")).strip() == "-":
+        return "reenviar_pedido"
 
     # ==========================================
     # EXAMINADA: extracción correcta
@@ -893,10 +907,12 @@ PATRONES_FACTURA = [
     r"\bFACTURE\b",
 ]
 
-# Detecta líneas del tipo: "Albarán: 1-000033 22/06/2026 ..."
-# El documento describe UN albarán como contenido principal
+# Detecta líneas del tipo: "Albarán: 1-000033 22/06/2026 PCMI26-24422"
+# donde hay contenido adicional (código de pedido) en la MISMA línea tras la fecha.
+# Las facturas que sólo referencian un albarán acaban en la fecha y no tienen
+# nada más en esa misma línea → no deben detectarse como albarán.
 _RE_ALBARAN_LINEA = re.compile(
-    r"Albar[aá]n:\s+[\w\-\.]+\s+\d{2}/\d{2}/\d{4}",
+    r"Albar[aá]n:\s+[\w\-\.]+\s+\d{2}/\d{2}/\d{4}[ \t]+\S",
     re.IGNORECASE,
 )
 
@@ -927,17 +943,18 @@ def mover_pdf(pdf_path, tipo):
     import time
 
     carpetas = {
-        "examinada": "facturas/examinadas",
-        "manual":    "facturas/corregir_manualmente",
-        "imagen":    "facturas/imagenes",
-        "albaran":   "facturas/albaran",
-        "error":     "facturas/error",
+        "examinada":       os.path.join(FACTURAS_DIR, "examinadas"),
+        "manual":          os.path.join(FACTURAS_DIR, "corregir_manualmente"),
+        "imagen":          os.path.join(FACTURAS_DIR, "imagenes"),
+        "albaran":         os.path.join(FACTURAS_DIR, "albaran"),
+        "reenviar_pedido": os.path.join(FACTURAS_DIR, "reenviar_falta_pedidocliente"),
+        "error":           os.path.join(FACTURAS_DIR, "error"),
     }
 
-    carpeta_destino = carpetas.get(tipo, "facturas/error")
+    carpeta_destino = carpetas.get(tipo, os.path.join(FACTURAS_DIR, "error"))
 
     # Carpeta maestra: TODOS los PDF procesados van aquí siempre
-    carpeta_procesadas = "facturas/procesadas"
+    carpeta_procesadas = os.path.join(FACTURAS_DIR, "procesadas")
     os.makedirs(carpeta_procesadas, exist_ok=True)
     dest_procesadas = os.path.join(carpeta_procesadas, os.path.basename(pdf_path))
     shutil.copy2(pdf_path, dest_procesadas)
@@ -949,7 +966,7 @@ def mover_pdf(pdf_path, tipo):
     shutil.copy2(pdf_path, destino)
     print("PDF COPIADO A", tipo.upper() + ":", destino)
 
-    for intento in range(10):
+    for _ in range(10):
 
         try:
 
@@ -966,8 +983,8 @@ def mover_pdf(pdf_path, tipo):
             time.sleep(1)
 
 def procesar_carpeta():
-    
-    carpeta = "facturas/entrada"
+
+    carpeta = os.path.join(FACTURAS_DIR, "entrada")
 
     resultados = []
 
@@ -993,6 +1010,11 @@ def procesar_carpeta():
             if es_albaran(text):
                 mover_pdf(pdf_path, "albaran")
                 resultados.append({"archivo": archivo, "estado": "albaran"})
+                continue
+
+            if len(text) < 80:
+                mover_pdf(pdf_path, "imagen")
+                resultados.append({"archivo": archivo, "estado": "imagen"})
                 continue
 
             result_csv = extract_invoice_with_agent(
