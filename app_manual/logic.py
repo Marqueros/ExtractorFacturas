@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import csv
 from io import StringIO
 from datetime import datetime
@@ -15,6 +16,9 @@ from openpyxl.utils import get_column_letter
 
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from sql_historial import guardar_factura_examinada_sql
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _fallback = os.path.join(os.path.dirname(_APP_DIR), "app_auto", "facturas")
@@ -1198,6 +1202,7 @@ def cargar_pdf_pendiente_individual(archivo):
 
 def confirmar_y_mover_factura(archivo, fila_completa, usuario):
     guardar_factura_corregida_completa(fila_completa=fila_completa, usuario=usuario)
+    guardar_factura_examinada_sql(fila_completa, "manual")
     src = os.path.join(CORREGIR_DIR, archivo)
     os.makedirs(EXAMINADAS_DIR, exist_ok=True)
     dest = os.path.join(EXAMINADAS_DIR, archivo)

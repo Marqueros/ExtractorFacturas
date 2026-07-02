@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import csv
 from io import StringIO
 from datetime import datetime
@@ -15,6 +16,9 @@ from openpyxl.utils import get_column_letter
 
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from sql_historial import guardar_factura_examinada_sql
 
 _fallback = os.path.join(os.path.dirname(os.path.abspath(__file__)), "facturas")
 FACTURAS_DIR = os.getenv("FACTURAS_DIR", _fallback).strip('"').strip("'")
@@ -1049,6 +1053,9 @@ def procesar_carpeta():
                 result_csv,
                 "auto"
             )
+
+            if tipo == "examinada":
+                guardar_factura_examinada_sql(fila, "auto")
 
         except Exception as e:
 

@@ -17,7 +17,13 @@ from logic import (
     clasificar_factura,
     mover_pdf,
     guardar_historial,
+    guardar_factura_examinada_sql,
 )
+
+# logic.py ya inserta la raíz del proyecto en sys.path, así que en este
+# punto "imagenes" (segunda pasada con vision para PDFs escaneados) es
+# importable sin rutas adicionales.
+from imagenes import procesar_carpeta_imagenes
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -25,6 +31,7 @@ TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 _fallback = os.path.join(BASE_DIR, "facturas")
 FACTURAS_DIR = os.getenv("FACTURAS_DIR", _fallback).strip('"').strip("'")
 CARPETA_ENTRADA = os.path.join(FACTURAS_DIR, "entrada")
+CARPETA_IMAGENES = os.path.join(FACTURAS_DIR, "imagenes")
 
 # Intervalo de vigilancia en segundos (configurable en .env)
 INTERVALO = int(os.getenv("INTERVALO_VIGILANCIA", "30"))
@@ -39,16 +46,29 @@ async def vigilar_entrada():
         await asyncio.sleep(INTERVALO)
         if _procesando:
             continue
-        if not os.path.exists(CARPETA_ENTRADA):
+
+        pdfs_entrada = []
+        if os.path.exists(CARPETA_ENTRADA):
+            pdfs_entrada = [f for f in os.listdir(CARPETA_ENTRADA) if f.lower().endswith(".pdf")]
+
+        pdfs_imagenes = []
+        if os.path.exists(CARPETA_IMAGENES):
+            pdfs_imagenes = [f for f in os.listdir(CARPETA_IMAGENES) if f.lower().endswith(".pdf")]
+
+        if not pdfs_entrada and not pdfs_imagenes:
             continue
-        pdfs = [f for f in os.listdir(CARPETA_ENTRADA) if f.lower().endswith(".pdf")]
-        if not pdfs:
-            continue
-        print(f"[Vigilante] {len(pdfs)} PDF(s) detectados — procesando...")
+
         _procesando = True
         try:
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(_executor, procesar_carpeta)
+
+            if pdfs_entrada:
+                print(f"[Vigilante] {len(pdfs_entrada)} PDF(s) en entrada — procesando...")
+                await loop.run_in_executor(_executor, procesar_carpeta)
+
+            if pdfs_imagenes:
+                print(f"[Vigilante] {len(pdfs_imagenes)} PDF(s) en imagenes — procesando con vision...")
+                await loop.run_in_executor(_executor, procesar_carpeta_imagenes)
         finally:
             _procesando = False
 
@@ -131,6 +151,9 @@ async def upload_pdf(file: UploadFile = File(...)):
         tipo = clasificar_factura(fila)
         mover_pdf(pdf_path, tipo)
         guardar_historial(result_csv, "auto")
+
+        if tipo == "examinada":
+            guardar_factura_examinada_sql(fila, "auto")
 
         return JSONResponse({"archivo": file.filename, "estado": tipo})
 
